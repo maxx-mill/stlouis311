@@ -2,10 +2,10 @@
 Data processor module for St. Louis 311 Service Integration.
 Handles data cleaning, validation, and enrichment of raw API data.
 """
-
-from datetime import datetime
+import arcpy
+from datetime import datetime as dt
 from config import (
-    DATE_FIELDS, DATE_FORMATS, COORDINATE_RANGES
+    DATE_FIELDS, DATE_FORMATS
 )
 
 
@@ -82,54 +82,66 @@ class DataProcessor:
         print(f"Data validation complete: {validation_stats}")
         return processed_requests
     
+    
+
     def _extract_coordinates(self, request, processed_request, validation_stats):
         """
         Extract coordinates from known fields.
-        Stores coordinates directly since geodatabase is in WGS84.
+        Store SRX/SRY as Web Mercator (EPSG:3857) X/Y meters, as provided by the source data.
         """
         try:
-            # Get coordinates from known fields (SRX/SRY or LAT/LONG)
             srx_raw = request.get('SRX')
             sry_raw = request.get('SRY')
             lat_raw = request.get('LAT')
             long_raw = request.get('LONG')
-            
-            # Try SRX/SRY first, then LAT/LONG
+
             x_coord = None
             y_coord = None
-            
-            if srx_raw and sry_raw:
+
+            # Use SRX/SRY directly if present
+            if srx_raw is not None and sry_raw is not None:
                 try:
-                    x_coord = float(srx_raw)
-                    y_coord = float(sry_raw)
-                except (ValueError, TypeError):
-                    pass
-            
-            if (x_coord is None or y_coord is None or x_coord == 0 or y_coord == 0) and (lat_raw and long_raw):
+                    print(f"Processing request {request.get('SERVICE_REQUEST_ID')}: SRX={srx_raw}, SRY={sry_raw}")
+                    x = float(srx_raw)
+                    y = float(sry_raw)
+                    point_geom = arcpy.PointGeometry(arcpy.Point(x, y), arcpy.SpatialReference(3857))
+                    if point_geom and point_geom.firstPoint:
+                        x_coord = point_geom.firstPoint.X
+                        y_coord = point_geom.firstPoint.Y
+                    else:
+                        x_coord = None
+                        y_coord = None
+                except Exception as e:
+                    print(f"Invalid geometry for request {request.get('SERVICE_REQUEST_ID')}: {e}")
+                    x_coord = None
+                    y_coord = None
+
+            # If SRX/SRY not valid, try LAT/LONG (treat as 3857 X/Y meters)
+            if (x_coord is None or y_coord is None or x_coord == 0 or y_coord == 0) and (lat_raw is not None and long_raw is not None):
                 try:
-                    x_coord = float(lat_raw)
-                    y_coord = float(long_raw)
+                    print(f"Processing request {request.get('SERVICE_REQUEST_ID')}: LAT={lat_raw}, LONG={long_raw}")
+                    x_coord = float(lat_raw)   # X in 3857
+                    y_coord = float(long_raw)  # Y in 3857
                 except (ValueError, TypeError):
-                    pass
-            
-            # If we have valid coordinates, store them directly (geodatabase will be in WGS84)
+                    x_coord = None
+                    y_coord = None
+
+            # Store as Web Mercator (3857) if coordinates are valid
             if x_coord is not None and y_coord is not None and x_coord != 0 and y_coord != 0:
-                # Store the coordinates directly - the geodatabase is already in WGS84
-                processed_request['SRX'] = x_coord  # Longitude
-                processed_request['SRY'] = y_coord  # Latitude
-                
+                processed_request['SRX'] = x_coord  # X in 3857
+                processed_request['SRY'] = y_coord  # Y in 3857
                 validation_stats['valid_coordinates'] += 1
                 return True
             else:
                 print(f"No valid coordinates found for request {request.get('SERVICE_REQUEST_ID')}")
                 validation_stats['missing_coordinates'] += 1
                 return False
-                
+
         except Exception as e:
             print(f"Error processing coordinates for request {request.get('SERVICE_REQUEST_ID')}: {e}")
             validation_stats['missing_coordinates'] += 1
             return False
-    
+        
     def _process_dates(self, request, processed_request, validation_stats):
         """
         Process date fields with multiple format support.
@@ -147,17 +159,15 @@ class DataProcessor:
                 try:
                     # Handle ISO datetime format (2025-07-05T23:48:01Z)
                     if 'T' in date_str and ('Z' in date_str or '+' in date_str):
-                        # Parse ISO datetime string
-                        from datetime import datetime
                         # Remove 'Z' and parse as UTC
                         if date_str.endswith('Z'):
                             date_str = date_str[:-1]
-                        processed_request[schema_field] = datetime.fromisoformat(date_str)
+                        processed_request[schema_field] = dt.fromisoformat(date_str)
                     else:
                         # Handle multiple date formats (professional requirement)
                         for fmt in DATE_FORMATS:
                             try:
-                                processed_request[schema_field] = datetime.strptime(date_str, fmt)
+                                processed_request[schema_field] = dt.strptime(date_str, fmt)
                                 break
                             except ValueError:
                                 continue

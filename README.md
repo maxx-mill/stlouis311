@@ -8,7 +8,7 @@ A professional, modular Python integration system for St. Louis 311 service requ
 - **Professional Data Processing**: Robust data validation, coordinate transformation, and error handling
 - **ArcGIS Integration**: Native geodatabase support with proper coordinate systems
 - **Comprehensive Logging**: Professional logging with configurable levels
-- **Coordinate Transformation**: Automatic conversion from Web Mercator to WGS84 coordinates
+- **Coordinate Transformation**: Automatic handling of Web Mercator (EPSG:3857) coordinates
 
 ## Project Structure
 
@@ -18,12 +18,12 @@ stlouis311/
 ├── integration.py       # Integration orchestrator
 ├── api_client.py        # API client for St. Louis Open311
 ├── processor.py         # Data processing and validation
-├── updater.py          # Geodatabase updates
-├── geodatabase.py      # Geodatabase management
+├── updater.py           # Geodatabase updates
+├── geodatabase.py       # Geodatabase management
 
-├── config.py           # Configuration settings
-├── README.md           # This file
-└── StLouis311.gdb/     # ArcGIS geodatabase
+├── config.py            # Configuration settings
+├── README.md            # This file
+└── StLouis311.gdb/      # ArcGIS geodatabase
 ```
 
 ## Installation
@@ -41,11 +41,23 @@ stlouis311/
 
 3. **ArcGIS Pro**: Ensure ArcGIS Pro is installed with Python environment
 
-## Configuration
+## API Key Setup
+
+This project requires an API key for the St. Louis 311 API. **Do not commit your API key to version control.**
+
+1. Create a file named `.env` in the project root (this file is already in `.gitignore`).
+2. Add your API key to the `.env` file:
+   ```
+   STL311_API_KEY=your_actual_api_key_here
+   ```
+3. The application will automatically load this key using `python-dotenv`.
+
+## Configuration (updated)
 
 Edit `config.py` to configure:
 
-- **API Settings**: API key, base URL, request parameters
+- **API Key**: Loaded from the environment variable `STL311_API_KEY` (see above)
+- **API Settings**: API base URL, request parameters
 - **Date Range**: Default date range for data fetching
 - **Geodatabase**: Path and coordinate system settings
 - **Logging**: Log level and file settings
@@ -63,7 +75,7 @@ python main.py
 This will:
 1. Fetch service requests from the St. Louis Open311 API
 2. Process and validate the data
-3. Transform coordinates from Web Mercator to WGS84
+3. Handle coordinates as Web Mercator (EPSG:3857) X/Y meters
 4. Store results in the geodatabase
 
 ### Individual Components
@@ -92,7 +104,7 @@ updater.update_service_requests_table(processed_requests)
 
 The system creates a `SERVICE_REQUESTS` feature class with the following fields:
 
-- **Geometry**: Point features with WGS84 coordinates
+- **Geometry**: Point features with Web Mercator (EPSG:3857) X/Y coordinates
 - **REQUESTID**: Unique request identifier
 - **DESCRIPTION**: Service request description
 - **STATUS**: Request status (New, Closed, etc.)
@@ -103,13 +115,14 @@ The system creates a `SERVICE_REQUESTS` feature class with the following fields:
 - **DATETIMECLOSED**: Request closure date/time
 - **SUBMITTO**: Responsible agency
 - **PROBLEMCODE**: Service code
-- **SRX/SRY**: WGS84 coordinates (Longitude/Latitude)
+- **SRX/SRY**: Web Mercator (EPSG:3857) X/Y coordinates (meters)
 
 ## Coordinate System
 
-- **Input**: Web Mercator (EPSG:3857) from API
-- **Output**: WGS84 Geographic (EPSG:4326) in geodatabase
-- **Validation**: St. Louis area bounds checking
+- **Input**: Web Mercator (EPSG:3857) X/Y meters from API (SRX/SRY, or fallback to LAT/LONG as X/Y in 3857)
+- **Output**: Web Mercator (EPSG:3857) X/Y meters in geodatabase and ArcGIS Online
+- **Validation**: St. Louis area bounds checking (in meters, 3857)
+- **No conversion to or from latitude/longitude (4326) is performed.**
 
 ## Logging
 
@@ -125,40 +138,4 @@ The system includes robust error handling:
 
 - **API Failures**: Retry logic with exponential backoff
 - **Data Validation**: Coordinate and date validation
-- **Geodatabase Errors**: Graceful handling of schema issues
-- **Missing Data**: Intelligent defaults and field mapping
-
-## Development
-
-### Adding New Fields
-
-1. Update `SERVICE_REQUESTS_SCHEMA` in `config.py`
-2. Add field mapping in `processor.py`
-3. Update geodatabase schema if needed
-
-### Extending Functionality
-
-- **New Data Sources**: Extend `APIClient` class
-- **Additional Processing**: Add methods to `DataProcessor`
-
-
-## Troubleshooting
-
-### Common Issues
-
-1. **ArcPy Import Error**: Ensure running in ArcGIS Pro Python environment
-2. **Coordinate Issues**: Check coordinate system settings in config
-3. **API Errors**: Verify API key and network connectivity
-4. **Geodatabase Errors**: Check file permissions and paths
-
-### Debug Mode
-
-Enable debug logging in `config.py`:
-
-```python
-LOG_LEVEL = "DEBUG"
-```
-
-## License
-
-This project is for professional GIS applications and follows best practices for data integration and geospatial processing. 
+- **Geodatabase Errors**: Graceful handling of schema issues 

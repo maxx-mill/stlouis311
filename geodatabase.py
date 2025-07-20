@@ -44,7 +44,7 @@ class GeodatabaseManager:
                 print(f"Current feature class coordinate system: {current_sr.name} (EPSG:{current_sr.factoryCode})")
                 
                 # If coordinate system doesn't match, delete and recreate
-                if current_sr.factoryCode != 4326:  # WGS84
+                if current_sr.factoryCode != 3857:  # Web Mercator
                     print("Coordinate system mismatch. Deleting and recreating feature class...")
                     arcpy.Delete_management(fc_path)
                     print(f"Deleted existing feature class: {fc_name}")
@@ -52,12 +52,12 @@ class GeodatabaseManager:
                     print(f"Feature class already exists with correct coordinate system: {fc_name}")
                     return
             
-            # Create feature class with WGS84 coordinate system
+            # Create feature class with Web Mercator coordinate system
             arcpy.CreateFeatureclass_management(
                 self.gdb_path, 
                 fc_name,
                 'POINT',
-                spatial_reference=arcpy.SpatialReference(4326)  # WGS84 Geographic
+                spatial_reference=arcpy.SpatialReference(3857)  # Web Mercator
             )
             
             # Add fields according to schema
@@ -75,7 +75,7 @@ class GeodatabaseManager:
                     except Exception as e:
                         print(f"Field {field_name} may already exist: {e}")
             
-            print(f"Created feature class with WGS84 coordinate system: {fc_name}")
+            print(f"Created feature class with Web Mercator coordinate system (EPSG:3857): {fc_name}")
                     
         except Exception as e:
             print(f"Error setting up geodatabase: {str(e)}")

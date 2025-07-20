@@ -4,7 +4,7 @@ Handles geodatabase updates and data insertion.
 """
 
 import arcpy
-from datetime import datetime
+from datetime import datetime as dt
 from config import SERVICE_REQUESTS_SCHEMA
 
 
@@ -52,7 +52,7 @@ class DataUpdater:
                 # Convert datetime objects to strings for ArcPy
                 row_data = {}
                 for field, value in request.items():
-                    if isinstance(value, datetime):
+                    if isinstance(value, dt):
                         # Convert datetime to string format that ArcPy can handle
                         row_data[field] = value.strftime('%Y-%m-%d %H:%M:%S')
                     elif field in ['DATECANCELLED', 'DATEINVTDONE', 'DATETIMECLOSED', 'DATETIMEINIT', 'PRJCOMPLETEDATE']:
@@ -82,12 +82,12 @@ class DataUpdater:
                         y_coord = row_data.get('SRY')
                         
                         if x_coord is not None and y_coord is not None:
-                            # Create point geometry
+                            # Create point geometry in 3857 directly
                             point = arcpy.Point(x_coord, y_coord)
-                            point_geometry = arcpy.PointGeometry(point, arcpy.SpatialReference(4326))
+                            point_geometry_3857 = arcpy.PointGeometry(point, arcpy.SpatialReference(3857))
                             
                             # Create row tuple with geometry first, then other fields
-                            row_tuple = [point_geometry] + [row_data.get(field, None) for field in SERVICE_REQUESTS_SCHEMA.keys() if field != 'SHAPE']
+                            row_tuple = [point_geometry_3857] + [row_data.get(field, None) for field in SERVICE_REQUESTS_SCHEMA.keys() if field != 'SHAPE']
                             cursor.insertRow(row_tuple)
                             inserted_count += 1
                         else:
@@ -141,7 +141,7 @@ class DataUpdater:
                 out_path=self.gdb_manager.gdb_path,
                 out_name='SERVICE_REQUESTS',
                 geometry_type='POINT',
-                spatial_reference=arcpy.SpatialReference(4326)  # WGS84 Geographic
+                spatial_reference=arcpy.SpatialReference(3857)  # Web Mercator
             )
             
             # Add fields according to schema

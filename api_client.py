@@ -5,7 +5,7 @@ Handles communication with the St. Louis Open311 API.
 
 import requests
 import time
-from datetime import datetime, timedelta
+from datetime import datetime as dt, timedelta
 from config import (
     API_BASE_URL, API_KEY, RATE_LIMIT_DELAY, MAX_PAGES,
     START_DATE, END_DATE, DEFAULT_STATUS
@@ -69,7 +69,12 @@ class APIClient:
                     print(f"API response keys: {list(data.keys())}")
                 
                 # API returns dictionary with service_requests key
-                requests_batch = data.get('service_requests', [])
+                    requests_batch = data.get('service_requests', [])
+                elif isinstance(data, list):
+                    requests_batch = data
+                else:
+                    print(f"Unexpected API response format: {data}")
+                    break
                 
                 if not requests_batch:
                     print(f"No more requests found on page {page}")
